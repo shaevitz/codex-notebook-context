@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.test-workspace/
+.test-user-data/
+*.vsix
+*.log
+.DS_Store
+
+.vscode-test/

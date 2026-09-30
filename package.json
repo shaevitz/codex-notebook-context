@@ -1,0 +1,21 @@
+{
+  "name": "codex-notebook-context", "displayName": "Codex Notebook Context", "description": "Automatically supply the active notebook cell, cursor and selection to Codex prompts via a local hook.",
+  "version": "0.1.0", "publisher": "shaevitz", "license": "MIT", "engines": {"vscode": "^1.96.0"},
+  "categories": ["Notebooks", "Other"], "main": "./src/extension.js", "activationEvents": ["onStartupFinished"],
+  "extensionKind": ["workspace"], "capabilities": {"untrustedWorkspaces": {"supported": false}, "virtualWorkspaces": false},
+  "repository": {"type":"git", "url":"https://github.com/shaevitz/codex-notebook-context.git"},
+  "files": ["src/**", "scripts/hook.js", "scripts/setup.js", "README.md", "LICENSE"],
+  "scripts": {"test": "node --test test/*.test.js", "package": "vsce package --no-dependencies --out dist/", "test:integration": "node scripts/integration.js"},
+  "devDependencies": {"@vscode/vsce": "^3.6.0", "@vscode/test-electron": "^2.5.2"},
+  "contributes": {
+    "commands": [
+      {"command":"codexNotebookContext.setup", "title":"Codex Notebook Context: Install Prompt Hook"},
+      {"command":"codexNotebookContext.remove", "title":"Codex Notebook Context: Remove Prompt Hook"},
+      {"command":"codexNotebookContext.preview", "title":"Codex Notebook Context: Preview Current Context"}
+    ],
+    "configuration": {"title":"Codex Notebook Context", "properties":{
+      "codexNotebookContext.enabled":{"type":"boolean","default":true,"description":"Include active notebook context in local Codex VS Code prompts."},
+      "codexNotebookContext.maxCellCharacters":{"type":"integer","default":6000,"minimum":500,"maximum":20000,"description":"Maximum characters of the active cell to include, centered near the cursor when truncated."}
+    }}
+  }
+}

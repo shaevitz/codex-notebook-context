@@ -1,0 +1,47 @@
+'use strict';
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const net = require('node:net');
+function directory() { return path.join(os.tmpdir(), `codex-notebook-${process.getuid()}`); }
+function socketPath(pid) { return path.join(directory(), `${pid}.sock`); }
+async function serve(getContext) {
+  const dir = directory();
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const stat = fs.lstatSync(dir);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) throw new Error('Unsafe notebook IPC directory');
+  const file = socketPath(process.pid);
+  // PID-specific socket: stale from an earlier process, never another active host.
+  try { fs.unlinkSync(file); } catch(e) { if (e.code !== 'ENOENT') throw e; }
+  const server = net.createServer(socket => {
+    let input = '';
+    socket.setTimeout(1000, () => socket.destroy());
+    socket.on('error', () => {});
+    socket.on('data', data => {
+      input += data;
+      if (input.length > 8192) return socket.destroy();
+      if (!input.includes('\n')) return;
+      try {
+        const request = JSON.parse(input.split('\n')[0]);
+        const value = request.version === 1 && typeof request.cwd === 'string' ? getContext(request.cwd) : null;
+        socket.end(JSON.stringify(value));
+      } catch { socket.end('null'); }
+    });
+  });
+  await new Promise((resolve,reject) => {server.once('error',reject);server.listen(file,resolve);});
+  fs.chmodSync(file,0o600);
+  return {dispose() {server.close();try{fs.unlinkSync(file);}catch{}}};
+}
+function request(pid, cwd) {
+  return new Promise(resolve => {
+    let result = '', done = false;
+    const socket = net.createConnection(socketPath(pid));
+    function finish(value) { if(done)return;done=true;socket.destroy();resolve(value); }
+    socket.setTimeout(700,()=>finish(null));
+    socket.on('error',()=>finish(null));
+    socket.on('connect',()=>socket.write(JSON.stringify({version:1,cwd})+'\n'));
+    socket.on('data',b=>{result+=b;if(result.length>150000)finish(null);});
+    socket.on('end',()=>{try{finish(JSON.parse(result));}catch{finish(null);}});
+  });
+}
+module.exports = {serve,request,socketPath};

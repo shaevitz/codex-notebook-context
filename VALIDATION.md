@@ -10,7 +10,7 @@
 
 ## Passed
 
-- `npm test`: 18 tests pass. Includes current cell/cursor/selection, unsaved text, selection retention, unavailable cursor, multi-cell selection, truncation, closed/unfocused/untrusted/remote/wrong-workspace rejection, actual Unix-socket IPC and child hook, nested CLI exclusion, malformed config protection, setup idempotence and preservation/removal of existing hooks.
+- `npm test`: 19 tests pass. Includes current cell/cursor/selection, unsaved text, selection retention, unavailable cursor, multi-cell selection, truncation, closed/unfocused/untrusted/remote/wrong-workspace rejection, actual Unix-socket IPC and child hook, nested CLI exclusion, large real-session metadata regression, malformed config protection, setup idempotence and preservation/removal of existing hooks.
 - Real VS Code extension-host integration: synthetic two-cell `.ipynb`, cell 1 selection `alpha`, cursor moved to line 2/column 8, cell 2 selection `gamma`, actual hook subprocess output, CLI and wrong-workspace rejection, and no context after notebook close. No notebook kernel required.
 - `npm run package`: VSIX built with only 10 manifest/runtime/documentation files; no dependencies, local snapshots, test profiles or credentials packaged.
 - VSIX installed successfully through official VS Code CLI. Installed runtime files byte-match source.
@@ -18,13 +18,18 @@
 - Private GitHub repository creation confirmed with `isPrivate=true`, owner `shaevitz`.
 - npm dependency audit at installation: zero vulnerabilities. All npm packages are development-only.
 
-## Final setup and remaining verification
+## Final setup and live verification
 
 The user explicitly approved this hook. Approval was applied through the bundled CLI's supported hook review screen: **Review hooks → UserPromptSubmit → the exact notebook hook → t to trust**. A subsequent app-server query confirmed trusted/enabled. No bypass flags or trust database edits were used. The existing VS Code extension host is serving live notebook/cursor metadata without reloading the user's modified notebook. ContextBridge remains installed and unchanged.
 
-An ordinary Codex sidebar prompt reaching a model with this additional context has **not yet been verified**. The integration test exercises a real extension host and hook subprocess, but uses a synthetic session metadata fixture; it does not substitute for a trusted app-server/model turn. The actual app-server `hooks/list` probe verifies configuration loading and saved trust state. The ordinary UI check could not yet run because the user was actively interacting with VS Code; computer control declined actions rather than interrupt that work.
+Two ordinary Codex sidebar prompts were verified end to end through the normal **Send** button after trust:
 
-After trust, use a synthetic notebook and ask: “Without opening files or tools, report the active notebook cell, cursor and selected text from the context provided with this prompt.” Change the selection and repeat. Then close the notebook and confirm no fresh notebook hook context is added. Previous-turn context can remain in conversation history, so a model recalling earlier data is not evidence that a closed notebook was injected again.
+1. Cell 8, cursor line 7 / column 59, with a full-line selection: the model reported the correct cell, cursor and exact selected text.
+2. Selection changed without editing the notebook: cell 8, cursor line 1 / column 8, four selected characters. The next ordinary prompt reported the new coordinates and exact new text.
+
+Both successful turns have actual `response_item` / `developer` context records in the Codex transcript at 2026-09-30 19:26:04 UTC and 19:27:18 UTC. The model was instructed not to use tools or open files. Notebook contents and transcript snapshots are intentionally not checked into this repository. The original full-line selection was restored and verified afterward. No notebook text was edited, saved, or reloaded for this test.
+
+The live test found and fixed a real compatibility bug: the initial implementation read only 16 KiB of session metadata, but the installed Codex emits a larger first record containing base instructions. The hook now reads the complete first JSON record up to a 1 MiB cap. A regression test covers a 40 KiB metadata record. Temporary metadata-only diagnostics were removed after verifying the fix.
 
 Local macOS and the Codex sidebar are supported. Remote workspaces, untitled notebooks, out-of-workspace notebooks, inactive windows and mismatched chat cwd are deliberately excluded. Missing hook origin, session metadata, socket, or live notebook fails open without additional context. There is no interception or replacement of Codex's ordinary Send action.
 

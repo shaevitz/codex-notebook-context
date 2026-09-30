@@ -18,3 +18,4 @@ test('fresh IPC responses; hook ancestry and origin isolation',async()=>{
  }finally{server.dispose();}
  assert.equal(await request(process.pid,'/work'),null);
 });
+test('IDE metadata longer than 16KiB is accepted; malformed/CLI metadata is rejected',()=>{const {isIdeTranscript}=require('../scripts/hook');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'notebook-meta-'));const file=path.join(dir,'session.jsonl');const meta={type:'session_meta',payload:{source:'vscode',originator:'codex_vscode',base_instructions:'x'.repeat(40000)}};try{fs.writeFileSync(file,JSON.stringify(meta)+'\n'+JSON.stringify({type:'event_msg',payload:{text:'not read'}}));assert(isIdeTranscript(file));meta.payload.source='cli';fs.writeFileSync(file,JSON.stringify(meta)+'\n');assert(!isIdeTranscript(file));fs.writeFileSync(file,'{broken');assert(!isIdeTranscript(file));assert(!isIdeTranscript(undefined));}finally{fs.rmSync(dir,{recursive:true});}});

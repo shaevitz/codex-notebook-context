@@ -33,4 +33,12 @@ The live test found and fixed a real compatibility bug: the initial implementati
 
 Local macOS and the Codex sidebar are supported. Remote workspaces, untitled notebooks, out-of-workspace notebooks, inactive windows and mismatched chat cwd are deliberately excluded. Missing hook origin, session metadata, socket, or live notebook fails open without additional context. There is no interception or replacement of Codex's ordinary Send action.
 
+## Existing-conversation refresh verification
+
+The initial successful sidebar tests used a new conversation. A conversation opened before hook installation subsequently failed to receive context, despite sharing the same IDE origin and workspace. On September 30, the supported **Developer: Reload Window** command followed by reopening that exact existing conversation fixed delivery. Inspection of the installed Codex extension also confirmed that its app-server restart action delegates to this window reload command.
+
+At 21:27:16 UTC, the original conversation received a real developer context record identifying cell 9. The reload had cleared text selection state, so cursor and selection were correctly reported as unavailable. After selecting the code again, an ordinary Send at 21:28:32 UTC injected cell 9, cursor line 11 / column 11, and the entire selection from line 1 / column 1 through line 11 / column 11. The model's visible reply and saved transcript both reported the exact selected code and coordinates, without tools. The notebook reported `dirty=false`; no notebook text was edited or saved. The original conversation remains open with the successful answer.
+
+This demonstrates the necessary refresh for a preexisting loaded conversation on the tested Codex version; it does not establish that every future Codex version caches hook configuration in the same way. Installation guidance now includes this one-time refresh and reselection step.
+
 Automatic approval review rejected an initial attempt to persistently trust the new repository folder, since approval covered only the hook. That dialog was cancelled; the hook review was successfully performed from an already trusted workspace. A separate temporary VS Code workspace remained in Restricted Mode and was closed without changing its trust. No folder-trust expansion remains necessary for normal use in the existing trusted notebook workspace.

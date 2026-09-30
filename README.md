@@ -7,7 +7,7 @@ A standalone macOS VS Code extension that supplies the active Jupyter notebook c
 1. Install Node.js (20 or later) and the packaged VSIX with `code --install-extension dist/codex-notebook-context-0.1.0.vsix`.
 2. Run **Codex Notebook Context: Install Prompt Hook** from the command palette. This adds one `UserPromptSubmit` handler to `$CODEX_HOME/hooks.json` (defaults to `~/.codex/hooks.json`). It preserves other hooks and leaves `config.toml` unchanged; existing hook files get timestamped backups.
 3. Review and trust the new **Codex Notebook Context** hook in Codex `/hooks`. Codex skips untrusted hooks. Use the CLI's `/hooks` if the IDE does not expose the hook browser. Use the same CODEX_HOME as the IDE.
-4. Start a fresh Codex conversation in the notebook's workspace folder. Keep the notebook active, select text or place the cursor in a cell, and submit a normal prompt in the Codex sidebar.
+4. For a conversation already open before hook installation, run **Developer: Reload Window** once, then reopen that same conversation from Codex's recent chats. Save any unsaved work before reloading. A fresh conversation also loads the hook. After reload, select the notebook text again or place the cursor in a cell; selection state may not survive reload. Submit a normal prompt in the Codex sidebar, with the conversation rooted in the notebook's workspace folder.
 
 Use **Codex Notebook Context: Preview Current Context** to inspect what can be sent. The extension setting `codexNotebookContext.enabled` pauses collection immediately. The hook may not produce a composer attachment chip; its context is added during submission.
 

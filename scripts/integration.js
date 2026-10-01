@@ -27,26 +27,34 @@ async function main() {
   // returns the older Electron name after a successful download.
   if(!fs.existsSync(executable) && path.basename(executable)==='Electron' && fs.existsSync(path.join(path.dirname(executable),'Code'))) executable=path.join(path.dirname(executable),'Code');
   const extensions = path.join(profile,'extensions');
-  let development = root;
+  let installedRoot;
+  const development = process.env.NOTEBOOK_VSIX ? [] : [root];
+  const driver=path.join(profile,'driver');fs.mkdirSync(driver,{recursive:true});
+  fs.writeFileSync(path.join(driver,'package.json'),JSON.stringify({name:'integration-driver',publisher:'notebooktest',version:'1.0.0',engines:{vscode:'^1.140.0'},main:'./index.js',activationEvents:['onStartupFinished'],capabilities:{untrustedWorkspaces:{supported:true}}}));
+  fs.writeFileSync(path.join(driver,'index.js'),'exports.activate=()=>{setTimeout(()=>require('+JSON.stringify(path.join(root,'test/integration-suite.js'))+').run().catch(e=>console.error(e)),1000);};');
   if (process.env.NOTEBOOK_VSIX) {
     const [cli,...args] = resolveCliArgsFromVSCodeExecutablePath(executable,{reuseMachineInstall:true});
     const installed = spawnSync(cli,[...args,'--user-data-dir='+userData,'--shared-data-dir='+path.join(profile,'shared-data'),'--extensions-dir='+extensions,'--install-extension',path.resolve(process.env.NOTEBOOK_VSIX),'--force'],{encoding:'utf8'});
     if (installed.status !== 0) throw Error('VSIX installation failed: '+installed.stderr);
-    development=path.join(profile,'driver');fs.mkdirSync(development,{recursive:true});
-    fs.writeFileSync(path.join(development,'package.json'),JSON.stringify({name:'integration-driver',publisher:'notebooktest',version:'1.0.0',engines:{vscode:'^1.140.0'}}));
+    installedRoot=path.join(extensions,fs.readdirSync(extensions).find(n=>n.startsWith('shaevitz.codex-notebook-context-0.2.0')) || 'missing');
+    const manifest=JSON.parse(fs.readFileSync(path.join(installedRoot,'package.json')));
+    if(manifest.publisher!== 'shaevitz'||manifest.name!=='codex-notebook-context'||manifest.version!=='0.2.0')throw Error('Unexpected installed VSIX identity/version');
+    for(const name of ['src/context.js','src/extension.js','src/transport.js','scripts/launcher.js','scripts/runtime.js','scripts/setup.js','scripts/hook.js'])if(!fs.readFileSync(path.join(installedRoot,name)).equals(fs.readFileSync(path.join(root,name))))throw Error('Installed runtime differs from candidate: '+name);
+
   }
   const resultFile=path.join(profile,'result.json');fs.rmSync(resultFile,{force:true});
   let passed = false;
   try {
-    // test-electron's runTests adds trust/sandbox bypasses. Launch directly so
-    // native Workspace Trust and sandbox protections remain enabled.
+    // Use a normal development host with an inert test driver. VS Code's
+    // extensionTestsPath mode substitutes in-memory trust storage; a normal
+    // host exercises native trust and the actual source/installed extension.
     console.log('Synthetic integration profile: '+profile);
     await new Promise((resolve,reject)=>{
       const child=spawn(executable,[workspace,'--user-data-dir='+userData,'--shared-data-dir='+path.join(profile,'shared-data'),'--extensions-dir='+extensions,
-        '--extensionDevelopmentPath='+development,'--extensionDevelopmentPath='+codex,
-        ...(process.env.NOTEBOOK_PREPARE_ONLY ? [] : ['--extensionTestsPath='+path.join(root,'test/integration-suite.js')]),
+        ...development.map(p=>'--extensionDevelopmentPath='+p),'--extensionDevelopmentPath='+codex,
+        ...(process.env.NOTEBOOK_PREPARE_ONLY ? [] : ['--extensionDevelopmentPath='+driver]),
         '--skip-welcome','--skip-release-notes','--disable-updates','--new-window','--disable-gpu','--disable-extension=github.copilot-chat'],
-        {stdio:'inherit',env:{...process.env,NOTEBOOK_TEST_NODE:process.execPath,NOTEBOOK_TEST_HOME:codexHome,NOTEBOOK_TEST_PACKAGED:process.env.NOTEBOOK_VSIX?'1':'0',NOTEBOOK_TEST_RESULT:resultFile}});
+        {stdio:'inherit',env:{...process.env,NOTEBOOK_TEST_NODE:process.execPath,NOTEBOOK_TEST_HOME:codexHome,NOTEBOOK_TEST_PACKAGED:process.env.NOTEBOOK_VSIX?'1':'0',NOTEBOOK_TEST_RESULT:resultFile,NOTEBOOK_TEST_EXTENSION_PATH:installedRoot||root}});
       const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Integration timed out; inspect retained synthetic profile.'));},process.env.NOTEBOOK_PREPARE_ONLY?900000:180000);
       const monitor=setInterval(()=>{if(fs.existsSync(resultFile))child.kill('SIGKILL');},500);
       child.once('error',e=>{clearTimeout(timer);clearInterval(monitor);reject(e);});

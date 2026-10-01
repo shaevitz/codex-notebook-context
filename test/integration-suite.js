@@ -5,12 +5,13 @@ const transcript=path.join(os.tmpdir(),`notebook-integration-${process.pid}.json
 fs.writeFileSync(transcript,JSON.stringify({type:'session_meta',payload:{source:'vscode',originator:'codex_vscode'}})+'\n');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function poll(f){for(let i=0;i<40;i++){if(f())return;await wait(100);}throw Error('Timed out waiting for notebook editor');}
-function hook(cwd,origin='codex_vscode') {return new Promise((resolve,reject)=>{const p=spawn(process.env.NOTEBOOK_TEST_NODE,[path.join(v.extensions.getExtension('shaevitz.codex-notebook-context').extensionPath,'scripts/launcher.js')],{env:{...process.env,CODEX_INTERNAL_ORIGINATOR_OVERRIDE:origin}});let out='';p.stdout.on('data',b=>out+=b);p.on('error',reject);p.on('close',()=>{try{resolve(out?JSON.parse(out):null);}catch(e){reject(e);}});p.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',cwd,transcript_path:transcript}));});}
+function hook(cwd,origin='codex_vscode') {return new Promise((resolve,reject)=>{const managed=path.join(process.env.NOTEBOOK_TEST_HOME,'notebook-context/launcher.js');const file=fs.existsSync(managed)?managed:path.join(process.env.NOTEBOOK_TEST_EXTENSION_PATH,'scripts/launcher.js');const p=spawn(process.env.NOTEBOOK_TEST_NODE,[file],{env:{...process.env,CODEX_INTERNAL_ORIGINATOR_OVERRIDE:origin}});let out='';p.stdout.on('data',b=>out+=b);p.on('error',reject);p.on('close',()=>{try{resolve(out?JSON.parse(out):null);}catch(e){reject(e);}});p.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',cwd,transcript_path:transcript}));});}
 async function run(){
  const root=v.workspace.workspaceFolders[0].uri.fsPath;
  if(process.env.NOTEBOOK_TEST_UNTRUSTED==='1'){
   assert(!v.workspace.isTrusted,'CI privacy test requires Restricted Mode');
-  const ext=v.extensions.getExtension('shaevitz.codex-notebook-context');assert(ext);
+  const ext=v.extensions.getExtension('shaevitz.codex-notebook-context');assert(!ext||!ext.isActive,'Installed extension must not activate in Restricted Mode');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(process.env.NOTEBOOK_TEST_EXTENSION_PATH,'package.json'))).version,'0.2.0');
   const notebook=await v.workspace.openNotebookDocument(v.Uri.file(path.join(root,'fixture.ipynb')));await v.window.showNotebookDocument(notebook);
   assert.equal(await hook(root),null,'Untrusted packaged workspace must supply no context');
   console.log('PASS: actual packaged extension supplies no context in Restricted Mode');return;

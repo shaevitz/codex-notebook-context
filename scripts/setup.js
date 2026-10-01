@@ -1,38 +1,56 @@
 #!/usr/bin/env node
 'use strict';
-const fs=require('node:fs');const path=require('node:path');const os=require('node:os');const cp=require('node:child_process');const {randomUUID}=require('node:crypto');
-const marker='Codex Notebook Context';
-function quote(s){return "'"+s.replace(/'/g,"'\\''")+"'";}
-function setup({home=process.env.CODEX_HOME || path.join(os.homedir(),'.codex'),remove=false,node}={}) {
-  const file=path.join(home,'hooks.json');
-  fs.mkdirSync(home,{recursive:true});
-  const previous=fs.existsSync(file)?fs.readFileSync(file,'utf8'):null;
-  const value=previous===null?{}:JSON.parse(previous);
-  if(!value || typeof value!=='object' || Array.isArray(value))throw Error('Existing hooks.json must be an object; no changes made.');
-  if(value.hooks!==undefined && (!value.hooks || typeof value.hooks!=='object'||Array.isArray(value.hooks)))throw Error('Invalid hooks table; no changes made.');
-  value.hooks??={};
-  const groups=value.hooks.UserPromptSubmit??[];
-  if(!Array.isArray(groups))throw Error('Invalid UserPromptSubmit hook list; no changes made.');
-  const filtered=groups.flatMap(g=>{
-    if(!Array.isArray(g.hooks))throw Error('Invalid hook group; no changes made.');
-    const hooks=g.hooks.filter(h=>!(h.statusMessage===marker && typeof h.command==='string' && h.command.includes('/scripts/hook.js')));
-    return hooks.length===g.hooks.length ? [g] : hooks.length ? [{...g,hooks}] : [];
-  });
-  if(!remove) {
-    // VS Code's process.execPath is Electron, not a standalone Node runtime.
-    node??=process.versions.electron?cp.execFileSync('/bin/zsh',['-lc','command -v node'],{encoding:'utf8'}).trim():process.execPath;
-    if(!path.isAbsolute(node))throw Error('A standalone Node.js executable is required.');
-    filtered.push({hooks:[{type:'command',command:`${quote(node)} ${quote(path.join(__dirname,'hook.js'))}`,timeout:3,statusMessage:marker,additionalContextLimit:5000}]});
-  }
-  if(filtered.length)value.hooks.UserPromptSubmit=filtered;else delete value.hooks.UserPromptSubmit;
-  const next=JSON.stringify(value,null,2)+'\n';
-  if(previous!==next) {
-    if(previous!==null)fs.writeFileSync(file+`.notebook-backup-${Date.now()}-${randomUUID()}`,previous,{mode:0o600,flag:'wx'});
-    // Detect concurrent changes before replacement, rather than silently overwriting them.
-    if((fs.existsSync(file)?fs.readFileSync(file,'utf8'):null)!==previous)throw Error('Hooks changed concurrently; retry setup.');
-    const tmp=file+`.notebook-${process.pid}.tmp`;fs.writeFileSync(tmp,next,{mode:0o600,flag:'wx'});fs.renameSync(tmp,file);
-  }
-  return {file,message:remove?'Notebook prompt hook removed. Restart Codex to apply.':'Notebook hook installed. Review and trust it using Codex /hooks, then start a new Codex conversation. Existing hooks and config.toml were preserved.'};
+// Notebook Context for Codex managed asset v1
+const fs=require('node:fs');const path=require('node:path');const {randomUUID}=require('node:crypto');
+const {discoverNode,homePath,quote,owned,readConfig}=require('./runtime');
+function safeDirectory(dir, privateOnly = false) {
+  fs.mkdirSync(dir,{recursive:true,mode:0o700});const stat=fs.lstatSync(dir);
+  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o022)||(privateOnly&&(stat.mode&0o077)))throw Error('Unsafe hook directory; no changes made.');
+}
+function readOwnedFile(file) {
+  try {const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==process.getuid()||stat.size>1024*1024)throw Error('Unsafe hook asset; no changes made.');return fs.readFileSync(file);}
+  catch(e){if(e.code==='ENOENT')return null;throw e;}
+}
+function atomic(file,bytes) {
+  const tmp=file+'.tmp-'+randomUUID();
+  try{fs.writeFileSync(tmp,bytes,{mode:0o600,flag:'wx'});fs.renameSync(tmp,file);}
+  finally{try{fs.unlinkSync(tmp);}catch(e){if(e.code!=='ENOENT')throw e;}}
+}
+function setup({home,remove=false,node}={}) {
+  home=homePath(home);safeDirectory(home);
+  const lock=path.join(home,'.notebook-context.lock');let fd;
+  try{fd=fs.openSync(lock,'wx',0o600);}catch(e){if(e.code==='EEXIST')throw Error('Another setup is running, or an earlier setup was interrupted. Retry after it finishes; inspect .notebook-context.lock before removing a stale lock.');throw e;}
+  const changedAssets=[];
+  try {
+    const {file,previous,value}=readConfig(home);const groups=value.hooks?.UserPromptSubmit||[];let removed=0;
+    const filtered=groups.flatMap(g=>{const handlers=g.hooks.filter(h=>{const ours=owned(h,home);if(ours)removed++;return !ours;});
+      if(handlers.length===g.hooks.length)return[g];
+      return handlers.length||Object.keys(g).some(k=>k!=='hooks')?[{...g,hooks:handlers}]:[];});
+    let runtime;
+    if(!remove) {
+      runtime=discoverNode(node);const assetDir=path.join(home,'notebook-context');safeDirectory(assetDir,true);
+      for(const name of ['launcher.js','setup.js','runtime.js']) {
+        const asset=path.join(assetDir,name),before=readOwnedFile(asset),bytes=fs.readFileSync(path.join(__dirname,name));
+        if(before?.equals(bytes))continue;
+        if(before!==null&&!before.toString('utf8').includes('// Notebook Context for Codex managed asset v1'))throw Error('Unrecognized file in notebook-context; preserved without changes.');
+        if(before!==null)fs.writeFileSync(asset+'.backup-'+randomUUID(),before,{mode:0o600,flag:'wx'});
+        changedAssets.push({asset,before});atomic(asset,bytes);
+      }
+      filtered.push({hooks:[{type:'command',command:`${quote(runtime.path)} ${quote(path.join(assetDir,'launcher.js'))}`,timeout:3,statusMessage:'Codex Notebook Context',additionalContextLimit:0}]});
+    }
+    if(remove&&!removed)return{file,changed:false,message:'No notebook prompt hook was registered. No configuration changed.'};
+    value.hooks??={};if(filtered.length)value.hooks.UserPromptSubmit=filtered;else delete value.hooks.UserPromptSubmit;
+    const next=JSON.stringify(value,null,2)+'\n';
+    if(previous!==next) {
+      if(previous!==null)fs.writeFileSync(file+'.notebook-backup-'+randomUUID(),previous,{mode:0o600,flag:'wx'});
+      if(readConfig(home).previous!==previous)throw Error('Hooks changed concurrently; retry setup.');
+      atomic(file,next);
+    }
+    return{file,changed:previous!==next,node:runtime,message:remove?
+      'Notebook prompt hook removed. Reload VS Code to refresh Codex. Recovery tools and backups remain in CODEX_HOME/notebook-context.':
+      'Notebook hook installed. Review and trust the exact hook in Codex /hooks. Reload VS Code once for existing chats, then reselect the notebook cell. Other hooks and config.toml were preserved.'};
+  }catch(e){for(const {asset,before} of changedAssets.reverse()){if(before===null)fs.unlinkSync(asset);else atomic(asset,before);}throw e;}
+  finally{fs.closeSync(fd);fs.unlinkSync(lock);}
 }
 if(require.main===module){try{console.log(JSON.stringify(setup({remove:process.argv.includes('--remove')})));}catch(e){console.error(e.message);process.exitCode=1;}}
 module.exports={setup};

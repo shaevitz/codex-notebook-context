@@ -1,4 +1,18 @@
-# Validation — 2026-09-30
+# Validation
+
+## v0.2.0 candidate — October 1, 2026
+
+- Display name: Notebook Context for Codex; extension ID remains `shaevitz.codex-notebook-context`; MIT.
+- Syntax/package checks and all 36 unit/lifecycle/IPC tests pass after the latest capture and privacy changes, on standalone Node 25.9.0 x64 running on an Apple Silicon Mac. npm audit reports zero vulnerabilities. Runtime has no third-party npm dependencies. CI Node 20/22/24 verification is pending.
+- Candidate VSIX builds successfully with 17 entries (runtime, manifest, MIT license, README/changelog/security/support, two synthetic PNG listing assets), approximately 74 KB. Packaging excludes tests, development dependencies, notebooks, transcripts, credentials, local records and test profiles. The final tested checksum will be recorded before publication.
+- Install/legacy update/repeated update, standalone recovery/removal after extension deletion, rollback, preservation of unrelated hooks and byte-preservation of config.toml, invalid configuration, symlinks/ownership/permissions, concurrent edits and failure rollback have regression coverage.
+- IPC tests pass for Unicode, oversized/malformed/duplicate requests, response limits, restart/disposal, real hook subprocess ancestry/origin and sibling-window exclusion. Source/selection capture is bounded and reads cell text once; context omits the absolute cell URI.
+- All four prior commits were inventoried and inspected. Targeted full-history scans found no credentials, personal home paths, notebook files or transcript snapshots. Historical author email is a placeholder noreply address; new commits use the verified GitHub account noreply address.
+- Positive v0.2.0 source and packaged VS Code integration and native Codex sidebar delivery have NOT yet passed. The initial isolated attempt reached the suite and correctly stopped because Workspace Trust was absent. Earlier window startup failure and subsequent untrusted-workspace attempts are failures, not positive test evidence. The runner now preserves native trust/sandbox protections, isolates settings/extensions/application shared storage, and requires a test-suite result record. Native trust approval for the exact synthetic folder is pending. CI deliberately exercises packaged Restricted Mode privacy instead of bypassing Workspace Trust.
+- The normal installed extension, hooks.json and config.toml remain byte-identical to the private preservation baseline. No user notebook has been edited, saved, reloaded or used in these v0.2.0 tests.
+- Private Git push/CI, public release and Marketplace submission are pending. Publication remains blocked until positive integration/native verification and the final release-content review. Marketplace account sign-in is complete; publisher creation requires the user to accept Microsoft’s agreement. No automated publishing credential has been created.
+
+## Historical v0.1.0 validation — September 30, 2026
 
 ## Installed environment
 

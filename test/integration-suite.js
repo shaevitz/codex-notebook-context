@@ -5,10 +5,22 @@ const transcript=path.join(os.tmpdir(),`notebook-integration-${process.pid}.json
 fs.writeFileSync(transcript,JSON.stringify({type:'session_meta',payload:{source:'vscode',originator:'codex_vscode'}})+'\n');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function poll(f){for(let i=0;i<40;i++){if(f())return;await wait(100);}throw Error('Timed out waiting for notebook editor');}
-function hook(cwd,origin='codex_vscode') {return new Promise((resolve,reject)=>{const p=spawn('/usr/local/bin/node',[path.join(__dirname,'../scripts/hook.js')],{env:{...process.env,CODEX_INTERNAL_ORIGINATOR_OVERRIDE:origin}});let out='';p.stdout.on('data',b=>out+=b);p.on('error',reject);p.on('close',()=>{try{resolve(out?JSON.parse(out):null);}catch(e){reject(e);}});p.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',cwd,transcript_path:transcript}));});}
+function hook(cwd,origin='codex_vscode') {return new Promise((resolve,reject)=>{const p=spawn(process.env.NOTEBOOK_TEST_NODE,[path.join(v.extensions.getExtension('shaevitz.codex-notebook-context').extensionPath,'scripts/launcher.js')],{env:{...process.env,CODEX_INTERNAL_ORIGINATOR_OVERRIDE:origin}});let out='';p.stdout.on('data',b=>out+=b);p.on('error',reject);p.on('close',()=>{try{resolve(out?JSON.parse(out):null);}catch(e){reject(e);}});p.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',cwd,transcript_path:transcript}));});}
 async function run(){
  const root=v.workspace.workspaceFolders[0].uri.fsPath;
+ if(process.env.NOTEBOOK_TEST_UNTRUSTED==='1'){
+  assert(!v.workspace.isTrusted,'CI privacy test requires Restricted Mode');
+  const ext=v.extensions.getExtension('shaevitz.codex-notebook-context');assert(ext);
+  const notebook=await v.workspace.openNotebookDocument(v.Uri.file(path.join(root,'fixture.ipynb')));await v.window.showNotebookDocument(notebook);
+  assert.equal(await hook(root),null,'Untrusted packaged workspace must supply no context');
+  console.log('PASS: actual packaged extension supplies no context in Restricted Mode');return;
+ }
+ assert(v.workspace.isTrusted,'Synthetic workspace must be approved through native Workspace Trust; tests never bypass it');
  const extension=v.extensions.getExtension('shaevitz.codex-notebook-context');await extension.activate();
+ assert.equal(extension.packageJSON.version,'0.2.0');
+ if(process.env.NOTEBOOK_TEST_PACKAGED==='1')assert(extension.extensionPath.includes('extensions'),'Must load installed VSIX');
+ const setup=await v.commands.executeCommand('codexNotebookContext.setup');assert(setup && setup.file.startsWith(process.env.NOTEBOOK_TEST_HOME));
+ const diag=await v.commands.executeCommand('codexNotebookContext.diagnostics');assert.equal(diag.hookRegistration,'one handler');assert.equal(diag.launcher,'matches this release');
  const notebook=await v.workspace.openNotebookDocument(v.Uri.file(path.join(root,'fixture.ipynb')));
  const editor=await v.window.showNotebookDocument(notebook);
  await v.commands.executeCommand('notebook.cell.edit');
@@ -30,9 +42,12 @@ async function run(){
  textEditor=v.window.activeTextEditor;textEditor.selection=new v.Selection(1,6,1,11);await wait(150);
  c=JSON.parse((await hook(root)).hookSpecificOutput.additionalContext.split('\n').slice(1).join('\n'));
  assert.equal(c.cell,2);assert.equal(c.selection.text,'gamma');assert.equal(c.cursor.column,12);
+ const edit=new v.WorkspaceEdit();edit.insert(notebook.cellAt(1).document.uri,new v.Position(1,11),' # unsaved sentinel');await v.workspace.applyEdit(edit);await wait(150);
+ c=JSON.parse((await hook(root)).hookSpecificOutput.additionalContext.split('\n').slice(1).join('\n'));assert(c.dirty);assert(c.source.includes('unsaved sentinel'));
+ const cfg=v.workspace.getConfiguration('codexNotebookContext');await cfg.update('enabled',false,v.ConfigurationTarget.Global);await wait(150);assert.equal(await hook(root),null);await cfg.update('enabled',true,v.ConfigurationTarget.Global);
  assert.equal(await hook(root,'codex_cli_rs'),null);assert.equal(await hook(path.dirname(root)),null);
- await v.commands.executeCommand('workbench.action.closeActiveEditor');await wait(200);assert.equal(await hook(root),null);
- fs.unlinkSync(transcript);
+ await notebook.save();await v.commands.executeCommand('workbench.action.closeActiveEditor');await wait(200);assert.equal(await hook(root),null);
+ const removed=await v.commands.executeCommand('codexNotebookContext.remove');assert(removed.changed);fs.unlinkSync(transcript);
  console.log('PASS: actual notebook cell/selection/cursor changes -> child hook -> additionalContext; CLI, other cwd and closed notebook excluded');
 }
-module.exports={run};
+module.exports={async run(){try{await run();fs.writeFileSync(process.env.NOTEBOOK_TEST_RESULT,JSON.stringify({status:'passed',mode:process.env.NOTEBOOK_TEST_UNTRUSTED==='1'?'untrusted':'trusted',packaged:process.env.NOTEBOOK_TEST_PACKAGED==='1'}));}catch(e){fs.writeFileSync(process.env.NOTEBOOK_TEST_RESULT,JSON.stringify({status:'failed',error:e.message}));throw e;}finally{fs.rmSync(transcript,{force:true});}}};

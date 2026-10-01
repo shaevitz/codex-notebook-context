@@ -1,21 +1,126 @@
 {
-  "name": "codex-notebook-context", "displayName": "Codex Notebook Context", "description": "Automatically supply the active notebook cell, cursor and selection to Codex prompts via a local hook.",
-  "version": "0.1.0", "publisher": "shaevitz", "license": "MIT", "engines": {"vscode": "^1.96.0"},
-  "categories": ["Notebooks", "Other"], "main": "./src/extension.js", "activationEvents": ["onStartupFinished"],
-  "extensionKind": ["workspace"], "capabilities": {"untrustedWorkspaces": {"supported": false}, "virtualWorkspaces": false},
-  "repository": {"type":"git", "url":"https://github.com/shaevitz/codex-notebook-context.git"},
-  "files": ["src/**", "scripts/hook.js", "scripts/setup.js", "README.md", "LICENSE"],
-  "scripts": {"test": "node --test test/*.test.js", "package": "vsce package --no-dependencies --out dist/", "test:integration": "node scripts/integration.js"},
-  "devDependencies": {"@vscode/vsce": "^3.6.0", "@vscode/test-electron": "^2.5.2"},
+  "name": "codex-notebook-context",
+  "displayName": "Notebook Context for Codex",
+  "description": "Automatically supply the active notebook cell, cursor and selection to Codex prompts via a local hook.",
+  "version": "0.2.0",
+  "publisher": "shaevitz",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.140.0"
+  },
+  "categories": [
+    "Notebooks",
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shaevitz/codex-notebook-context.git"
+  },
+  "files": [
+    "src/**",
+    "scripts/launcher.js",
+    "scripts/hook.js",
+    "scripts/setup.js",
+    "scripts/runtime.js",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SUPPORT.md",
+    "SECURITY.md",
+    "docs/demo.png",
+    "docs/icon.png"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "vsce package --no-dependencies --out dist/",
+    "test:integration": "node scripts/integration.js",
+    "check": "node scripts/check.js",
+    "vscode:prepublish": "npm run check && npm test",
+    "verify:release": "node scripts/verify-release.js"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0",
+    "@vscode/test-electron": "^2.5.2"
+  },
   "contributes": {
     "commands": [
-      {"command":"codexNotebookContext.setup", "title":"Codex Notebook Context: Install Prompt Hook"},
-      {"command":"codexNotebookContext.remove", "title":"Codex Notebook Context: Remove Prompt Hook"},
-      {"command":"codexNotebookContext.preview", "title":"Codex Notebook Context: Preview Current Context"}
+      {
+        "command": "codexNotebookContext.setup",
+        "title": "Notebook Context for Codex: Install Prompt Hook"
+      },
+      {
+        "command": "codexNotebookContext.remove",
+        "title": "Notebook Context for Codex: Remove Prompt Hook"
+      },
+      {
+        "command": "codexNotebookContext.preview",
+        "title": "Notebook Context for Codex: Preview Current Context"
+      },
+      {
+        "command": "codexNotebookContext.diagnostics",
+        "title": "Notebook Context for Codex: Show Diagnostics"
+      }
     ],
-    "configuration": {"title":"Codex Notebook Context", "properties":{
-      "codexNotebookContext.enabled":{"type":"boolean","default":true,"description":"Include active notebook context in local Codex VS Code prompts."},
-      "codexNotebookContext.maxCellCharacters":{"type":"integer","default":6000,"minimum":500,"maximum":20000,"description":"Maximum characters of the active cell to include, centered near the cursor when truncated."}
-    }}
-  }
+    "configuration": {
+      "title": "Notebook Context for Codex",
+      "properties": {
+        "codexNotebookContext.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Supply the whole active cell (including unsaved text), cursor and selection on eligible Codex prompts. Context enters Codex conversation storage. Disable to stop future collection."
+        },
+        "codexNotebookContext.maxCellCharacters": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 500,
+          "maximum": 20000,
+          "description": "Maximum characters of the active cell to include, centered near the cursor when truncated."
+        },
+        "codexNotebookContext.nodePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional absolute standalone Node.js 20+ executable path. Otherwise discovered automatically."
+        },
+        "codexNotebookContext.codexHome": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional Codex home directory. Must match the directory used by the Codex IDE extension. Defaults to CODEX_HOME or ~/.codex."
+        },
+        "codexNotebookContext.allowUntestedCodex": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Opt in to an untested Codex extension version. Review compatibility and verify an ordinary sidebar prompt. Delivery may fail after Codex changes."
+        }
+      }
+    }
+  },
+  "keywords": [
+    "codex",
+    "jupyter",
+    "notebook",
+    "cursor",
+    "selection"
+  ],
+  "pricing": "Free",
+  "bugs": {
+    "url": "https://github.com/shaevitz/codex-notebook-context/issues"
+  },
+  "homepage": "https://github.com/shaevitz/codex-notebook-context#readme",
+  "icon": "docs/icon.png"
 }

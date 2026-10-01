@@ -1,48 +1,68 @@
-# Codex Notebook Context
+# Notebook Context for Codex
 
-A standalone macOS VS Code extension that supplies the active Jupyter notebook cell, cursor and selected text to ordinary local Codex prompts. No clipboard or special send command. This extension does not modify Codex or ContextBridge.
+A macOS VS Code extension that gives ordinary **Codex sidebar prompts** the active notebook cell, cursor, and selection, including unsaved edits. Place your cursor or select notebook text, then use Codex's usual Send button.
 
-## Install
+**macOS preview · independent extension · MIT**. Developed independently of OpenAI and Microsoft. The extension ID remains `shaevitz.codex-notebook-context` for upgrades.
 
-1. Install Node.js (20 or later) and the packaged VSIX with `code --install-extension dist/codex-notebook-context-0.1.0.vsix`.
-2. Run **Codex Notebook Context: Install Prompt Hook** from the command palette. This adds one `UserPromptSubmit` handler to `$CODEX_HOME/hooks.json` (defaults to `~/.codex/hooks.json`). It preserves other hooks and leaves `config.toml` unchanged; existing hook files get timestamped backups.
-3. Review and trust the new **Codex Notebook Context** hook in Codex `/hooks`. Codex skips untrusted hooks. Use the CLI's `/hooks` if the IDE does not expose the hook browser. Use the same CODEX_HOME as the IDE.
-4. For a conversation already open before hook installation, run **Developer: Reload Window** once, then reopen that same conversation from Codex's recent chats. Save any unsaved work before reloading. A fresh conversation also loads the hook. After reload, select the notebook text again or place the cursor in a cell; selection state may not survive reload. Submit a normal prompt in the Codex sidebar, with the conversation rooted in the notebook's workspace folder.
+![Illustrated notebook-to-Codex workflow](docs/demo.png)
 
-Use **Codex Notebook Context: Preview Current Context** to inspect what can be sent. The extension setting `codexNotebookContext.enabled` pauses collection immediately. The hook may not produce a composer attachment chip; its context is added during submission.
+## Install and first use
 
-## Scope and privacy
+1. Install the OpenAI Codex VS Code extension and standalone [Node.js](https://nodejs.org/en/download) **20 or newer**. Node embedded inside VS Code is not a standalone executable. The installer checks PATH, Homebrew locations, Volta, asdf and nvm. Set **Notebook Context for Codex: Node Path** to an absolute executable path if needed.
+2. Install this extension. For a downloaded VSIX, use **Extensions → … → Install from VSIX**. The preview package is `codex-notebook-context-0.2.0.vsix`.
+3. In the command palette, run **Notebook Context for Codex: Install Prompt Hook**. It installs a stable launcher and recovery tools in `$CODEX_HOME/notebook-context/` (default `~/.codex/notebook-context/`) and registers one handler in `hooks.json`. Existing hooks are preserved; `config.toml` is untouched. Set **Codex Home** if the IDE uses a different home directory.
+4. Review and trust the exact **Codex Notebook Context** hook through Codex `/hooks`. Use the CLI hook browser with the same Codex home if the IDE does not expose it. The extension never grants hook trust. [Official hook review](https://learn.chatgpt.com/docs/hooks).
+5. For chats that were already open, save your work and run **Developer: Reload Window** once, then reopen the chat. Place the cursor or select notebook text again; reload may clear selection state.
+6. Open a saved local notebook inside a trusted workspace. The Codex chat directory must exactly equal that notebook's workspace folder, including in multi-root workspaces. Submit a normal sidebar prompt such as “Which cell and cursor position am I using?” No kernel is required.
 
-- Local macOS VS Code only. Remote SSH/WSL/containers, browser editors and untitled/outside-workspace notebooks are excluded.
-- Requires trusted VS Code workspace, a focused VS Code window, an active open file notebook, and an exact match between Codex's working directory and the notebook's workspace folder. Chats rooted in another directory (including a subdirectory) receive no context.
-- A private Unix socket belongs to each extension host. The hook checks Codex's IDE origin and the transcript's IDE session metadata and finds the matching socket in its process ancestry, avoiding another window's notebook. Ordinary CLI and desktop Codex sessions receive nothing.
-- Source text is read on demand from the live VS Code API, including unsaved edits. Nothing is written to snapshot files, clipboard, notebook outputs or project instructions. The only socket files are in the user's private temporary directory; closing/reloading the host removes its socket. An unreachable socket fails open without context.
-- Context includes the active cell only, at most 6,000 source characters and 6,000 selected characters by default (configurable up to 20,000 each). No outputs, other cells or kernel variables. Coordinates are 1-based UTF-16 positions. A missing cursor is reported as unavailable, never invented.
-- Hook context becomes part of the Codex conversation and is subject to Codex's existing storage/data handling. Disabling this extension does not erase context in earlier turns.
-- On Codex updates that change its origin identifier or process topology, the hook fails closed for context delivery; revalidate after upgrading.
+**Preview Current Context** shows the exact bounded data that can be supplied. **Show Diagnostics** reports compatibility, hook registration, launcher integrity, Node discovery, workspace eligibility and recent socket requests. Diagnostics cannot prove hook trust or delivery into the conversation. Verify a normal prompt after setup or an update. No composer attachment chip is promised.
 
-## Remove / roll back
+## What is sent, and when
 
-Run **Codex Notebook Context: Remove Prompt Hook**, then uninstall the extension. Restart Codex to apply hook changes. Removal strips only this extension's handler; it retains other hooks and never modifies `config.toml`. Alternatively run `node scripts/setup.js --remove` from the checkout. Backups are adjacent to `hooks.json` with `.notebook-backup-<timestamp>` suffixes. Do not restore a whole old backup over newer unrelated hook changes without comparing it first.
+Each eligible prompt receives the **whole active cell**, not only selected text, plus its language, notebook-relative path, cell number, cursor and selection. The source includes unsaved edits. The default bound is 6,000 UTF-16 units for source and 6,000 for selection; each is configurable from 500 to 20,000. Long source is centered near the cursor and marked truncated. Missing cursor/selection is reported as unavailable. Outputs, other cells and kernel variables are excluded.
 
-## Development
+Collection requires a focused VS Code window, a trusted local workspace, an active file notebook inside that workspace, an exact chat-directory match, IDE session metadata and the matching extension host in the hook's process ancestry. A different VS Code window's socket is never selected. Remote SSH, WSL, containers, web editors, untitled notebooks, CLI and Codex desktop sessions are excluded.
+
+Source is read from the live editor on demand. This extension writes no notebook snapshots, telemetry or clipboard data. It uses private Unix sockets with account ownership and permissions checks. **Other processes running as your macOS account are not an isolation boundary** and could impersonate an IDE request. The extension is not a security boundary against malicious same-account software.
+
+Hook context enters **Codex conversation storage** and follows Codex's data handling. Disabling collection stops future context; it does not remove earlier conversation turns. The registered handler sets `additionalContextLimit: 0` to avoid Codex's oversized-hook-output file mechanism, while the extension separately caps payloads. Codex may still store conversation data under its normal rules. Preview explicitly displays source in a VS Code output pane; diagnostics do not display cell text.
+
+## Compatibility
+
+| Component | Tested baseline |
+| --- | --- |
+| OS / architecture | Local macOS, Apple Silicon |
+| VS Code | 1.140.0 |
+| OpenAI Codex extension | 26.5917.62051 |
+| Embedded Codex | 0.155.0-alpha.16.3 |
+| Standalone Node | See current validation record |
+
+The manifest requires VS Code 1.140 or newer, using stable notebook APIs. Newer VS Code versions and Intel Macs require validation. An unfamiliar **Codex extension version pauses collection by default**. If you deliberately enable **Allow Untested Codex**, test a normal sidebar prompt and report a reproducible result. This is an opt-in preview, not a compatibility guarantee.
+
+The hook event/output format is documented by OpenAI. IDE origin identifiers, transcript metadata and extension-host ancestry are observed compatibility dependencies, not a stable public API. Missing or incompatible context adds nothing and lets your prompt continue. A successful socket reply does not prove that Codex accepted the context.
+
+## Upgrade, disable, remove and roll back
+
+- **Disable:** turn off **Notebook Context for Codex: Enabled** to stop future collection immediately.
+- **Upgrade from 0.1.0:** install the new VSIX, run **Install Prompt Hook** once, review/trust the changed definition, then refresh existing chats. The old versioned path is replaced with the stable launcher. Unrelated hooks survive.
+- **Later compatible upgrades:** the stable launcher continues to request protocol version 1 from the active host; it has no path to a versioned extension folder. If diagnostics says the launcher differs from the installed release, rerun **Install Prompt Hook** to update its scripts, review the change, and verify delivery.
+- **Remove:** run **Remove Prompt Hook**, then uninstall the extension and reload VS Code. This removes only recognized extension handlers. Backups and recovery scripts remain for inspection.
+- **Already uninstalled:** the leftover hook is inert once its extension host is gone. Remove registration with `node "$HOME/.codex/notebook-context/setup.js" --remove` (use your actual Codex home). Ordinary prompts continue without context. VS Code does not offer this extension an automatic uninstall callback.
+- **Roll back:** install the prior VSIX and run its **Install Prompt Hook** to restore compatible managed scripts. Review/trust changes and test delivery. Whole `hooks.json` backups are for comparison: do not overwrite newer unrelated hooks with an old backup.
+
+Setup uses a cooperative exclusive lock, bounded schema checks, private staged files and atomic replacement. If configuration changes while scripts are staged, it aborts and restores prior managed scripts. Concurrent manual writers do not honor this lock; avoid editing `hooks.json` during setup. An interrupted setup can leave `.notebook-context.lock`: inspect it and confirm no setup is running before removing that stale lock. Malformed configuration, symlinks, unsafe permissions and unrecognized files are preserved with an error.
+
+## Development and support
 
 ```sh
 npm ci
+npm run check
 npm test
 npm run test:integration
 npm run package
+NOTEBOOK_VSIX=dist/codex-notebook-context-0.2.0.vsix npm run test:integration
 ```
 
-The integration suite launches an isolated window using the installed VS Code app, a synthetic notebook and a separate test profile. It exercises actual notebook/cell/selection APIs and the hook subprocess. No notebook kernel is required. Test profiles, packaged binaries and dependencies are ignored by Git. Runtime has no third-party npm dependencies.
+Integration uses only a synthetic notebook, isolated settings/extensions, and an inert Codex version fixture. Local positive tests place only a synthetic fixture in `.test-workspace/`; approve that exact folder through native Workspace Trust in the isolated profile. Settings, extensions and application shared storage use separate temporary directories. Reuse an approved synthetic profile via `NOTEBOOK_TEST_PROFILE` when testing source and packaged builds. No trust or sandbox bypass flags are used. CI uses a fresh untrusted workspace and checks that the packaged extension supplies no context in Restricted Mode. Positive source and packaged tests must also pass locally before release. It checks actual VS Code APIs and hook IPC; it does not replace a normal-sidebar delivery test with real Codex. Set `VSCODE_EXECUTABLE_PATH` or `VSCODE_VERSION` for repeatable runs. Successful profiles are removed; failed profiles are retained for inspection. No test modifies your normal VS Code profile.
 
-## Compatibility evidence
-
-Developed against VS Code 1.140.0 (arm64), OpenAI extension 26.5917.62051, and its bundled Codex CLI 0.155.0-alpha.16.3. The bundled CLI reports `hooks` stable/enabled and generated app-server types include `UserPromptSubmit`, hook trust metadata and additional context output. This is not a guarantee that untrusted hooks run: trust review remains required.
-
-References:
-- [Codex hooks and trust](https://learn.chatgpt.com/docs/hooks)
-- [VS Code notebook/editor API](https://code.visualstudio.com/api/references/vscode-api)
-- [Codex notebook selection issue #38514](https://github.com/openai/codex/issues/38514)
-
-See `VALIDATION.md` for the actual completed checks and outstanding limitations.
+Runtime has no third-party npm dependencies. CI checks Node 20/22/24, packages the allowlisted files and runs the isolated Restricted Mode privacy suite. See [validation](VALIDATION.md), [support](SUPPORT.md), [security](SECURITY.md) and [release process](docs/RELEASING.md).

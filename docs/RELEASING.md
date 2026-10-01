@@ -1,0 +1,14 @@
+# Release process
+
+Keep source, artifacts and validation consistent. Publication is a separate step after reviewing the actual candidate.
+
+1. Run `npm ci`, syntax/package checks, unit/lifecycle/IPC tests, isolated source and packaged-VSIX integration (positive local coverage plus Restricted Mode CI coverage, without trust or sandbox bypasses), and a dependency audit. Inspect every allowlisted VSIX entry and full Git history for secrets, personal paths, notebooks, logs and unexpected binaries. Record exact versions, checksums, passed/failed/not-run checks and remaining limits in VALIDATION.md.
+2. Verify native ordinary-sidebar delivery for a new and existing chat with real supported Codex; preserve the user's working notebook. Validate clean install, upgrade, disable, uninstall and rollback in isolated profiles, including a separate Mac before promising wider support.
+3. Review release content, privacy disclosure, MIT attribution, identity and test evidence. GitHub source and Marketplace publication are separate outcomes. Retain `shaevitz.codex-notebook-context` to preserve upgrade identity.
+4. Make the reviewed repository public, enable private vulnerability reporting if available, verify anonymous source access, and attach the exact tested VSIX and checksum to a versioned GitHub release.
+5. For the first Marketplace release, use the [publisher-management website](https://marketplace.visualstudio.com/manage). Josh signs in with his Microsoft account, chooses/creates the publisher, completes required verification and accepts any presented binding terms himself. Check the publisher ID before packaging: its ID cannot be changed later. `shaevitz` is intended but not reserved by this repository.
+6. Upload the reviewed VSIX through the website's New extension → Visual Studio Code flow. Wait for Marketplace validation; verify the resulting listing/owner/version and a clean install through VS Code. Record public URLs and actual status. Publishing independently does not imply Microsoft/OpenAI endorsement or a verified-publisher badge.
+
+The [official publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) supports website VSIX upload, avoiding a new publishing secret for the first release. Its current October 1, 2026 text says global Azure DevOps PATs retire December 1, 2026 and recommends Entra ID for automated publishing. Recheck that guidance before setting up future automation. Never put credentials in chat, logs, repository files or CI artifacts.
+
+If launcher code changes, existing installs require Install Prompt Hook to update their managed scripts. Review the exact change and verify native trust/delivery. Atomic script replacement allows already-running hooks to finish; setup restores staged scripts if hook-config commit fails. Abrupt termination can leave a cooperative lock and backups requiring inspection. Do not blindly restore whole configuration backups.

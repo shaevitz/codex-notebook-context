@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — release candidate
+## 0.2.0 — 2026-10-01 (macOS preview)
 
 - Use the name Notebook Context for Codex while retaining the installed extension ID.
 - Replace versioned hook paths with a standalone stable launcher and post-uninstall recovery tool.

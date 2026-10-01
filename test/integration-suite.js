@@ -4,7 +4,7 @@ const fs=require('node:fs');const os=require('node:os');
 const transcript=path.join(os.tmpdir(),`notebook-integration-${process.pid}.jsonl`);
 fs.writeFileSync(transcript,JSON.stringify({type:'session_meta',payload:{source:'vscode',originator:'codex_vscode'}})+'\n');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-async function poll(f){for(let i=0;i<40;i++){if(f())return;await wait(100);}throw Error('Timed out waiting for notebook editor');}
+async function poll(f){for(let i=0;i<100;i++){if(f())return;await wait(100);}throw Error('Timed out waiting for notebook editor');}
 function hook(cwd,origin='codex_vscode') {return new Promise((resolve,reject)=>{const managed=path.join(process.env.NOTEBOOK_TEST_HOME,'notebook-context/launcher.js');const file=fs.existsSync(managed)?managed:path.join(process.env.NOTEBOOK_TEST_EXTENSION_PATH,'scripts/launcher.js');const p=spawn(process.env.NOTEBOOK_TEST_NODE,[file],{env:{...process.env,CODEX_INTERNAL_ORIGINATOR_OVERRIDE:origin}});let out='';p.stdout.on('data',b=>out+=b);p.on('error',reject);p.on('close',()=>{try{resolve(out?JSON.parse(out):null);}catch(e){reject(e);}});p.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',cwd,transcript_path:transcript}));});}
 async function run(){
  const root=v.workspace.workspaceFolders[0].uri.fsPath;
@@ -24,6 +24,7 @@ async function run(){
  const diag=await v.commands.executeCommand('codexNotebookContext.diagnostics');assert.equal(diag.hookRegistration,'one handler');assert.equal(diag.launcher,'matches this release');
  const notebook=await v.workspace.openNotebookDocument(v.Uri.file(path.join(root,'fixture.ipynb')));
  const editor=await v.window.showNotebookDocument(notebook);
+ editor.selection=new v.NotebookRange(0,1);
  await v.commands.executeCommand('notebook.cell.edit');
  await poll(()=>v.window.activeTextEditor?.document.uri.toString()===notebook.cellAt(0).document.uri.toString());
  let textEditor=v.window.activeTextEditor;

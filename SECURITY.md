@@ -1,6 +1,6 @@
 # Security policy
 
-Only the latest preview candidate receives fixes. This extension adds editor content to Codex conversations and must be treated as a content-sharing tool.
+Only the latest preview release receives fixes. This extension adds editor content to Codex conversations and must be treated as a content-sharing tool.
 
 Report a suspected vulnerability privately through [GitHub private vulnerability reporting](https://github.com/shaevitz/codex-notebook-context/security/advisories/new) when enabled. If private reporting is unavailable, open an issue requesting a private contact channel without including exploit details, notebook data or credentials. Do not publish private user data to demonstrate a bug.
 
